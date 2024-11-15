@@ -1,0 +1,110 @@
+fileListFarm = "rock.txt"
+
+totalRockPerWorld = 10
+
+worldStorageRocks = ""
+
+delayWarp = 4000
+delayPlace = 200
+delayMove = 200
+
+-- DONT EDIT --
+
+listFarm = {}
+worldStorage = {}
+rockId = 10
+
+function setup()
+    local text = read(fileListFarm)
+    for farm in text:gmatch("[^\r\n]+") do
+        local world, id = farm:match("([^%+%|:]*)[%+%|:]*(.*)")
+        if world ~= nil and id ~= nil then
+            table.insert(listFarm, {name = world, id = id})
+        end
+    end
+
+    worldStorage.name, worldStorage.id = worldStorageRocks:match("([^%+%|:]*)[%+%|:]*(.*)")
+end
+
+function getAmountTileById(id)
+    if getWorld().growscan:getTiles()[id] ~= nil then
+        return getWorld().growscan:getTiles()[id]
+    end
+    return 0
+end
+
+function warp(world, id, delay)
+    if id == nil or id == ""  then
+        while not getBot():isInWorld(world:upper()) do
+            getBot():warp(world:upper())
+            sleep(delay)
+        end
+    else
+        while not getBot():isInWorld(world:upper()) or getWorld():getTile(getBot().x, getBot().y).fg == 6 do
+            getBot():warp(world, id)
+            sleep(delay)
+        end
+    end
+end
+
+function takeItem(id)
+    print("Taking " .. getInfo(id).name)
+    for _, obj in pairs(getObjects()) do
+        if obj.id == id then
+            getBot():findPath(math.floor(obj.x/32), math.floor(obj.y/32))
+            sleep(2000)
+            getBot():collectObject(obj.oid, 2)
+            sleep(1000)
+            if getInventory():findItem(id) > 0 then
+                break
+            end
+        end
+    end
+end
+
+function placeRock() 
+    print("Placing rock")
+    local x = 99
+    for y = 0, 52 do
+        if getTile(x, y).fg == 0 then
+            while not getBot():isInTile(x, y + 1) and #getBot():getPath(x, y + 1) > 0  do
+                getBot():findPath(x, y + 1)
+                sleep(delayMove)
+            end
+            if getBot():isInTile(x, y + 1) then
+                getBot():place(x, y, rockId)
+                sleep(delayPlace)
+            end
+        end
+        if getAmountTileById(rockId) >= totalRockPerWorld then
+            break
+        end
+    end
+end
+
+function main()
+    setup()
+    if getInventory():findItem(rockId) < totalRockPerWorld then
+        warp(worldStorage.name, worldStorage.id, delayWarp)
+        takeItem(rockId)
+    end
+
+    for _, world in pairs(listFarm) do
+        warp(world.name, world.id, delayWarp)
+        if getAmountTileById(rockId) < totalRockPerWorld then
+            placeRock() 
+            if getInventory():findItem(rockId) < totalRockPerWorld then
+                warp(worldStorage.name, worldStorage.id, delayWarp)
+                takeItem(rockId)
+            end
+        end
+    end
+
+    warp(worldStorage.name, worldStorage.id, delayWarp)
+    while getInventory():findItem(rockId) > 0 do
+        getBot():drop(rockId, getInventory():findItem(rockId))
+        sleep(delayDrop)
+    end
+end
+
+main()
